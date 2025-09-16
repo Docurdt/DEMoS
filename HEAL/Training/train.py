@@ -1,8 +1,5 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
-"""
-
-"""
 
 import pickle
 
@@ -17,13 +14,12 @@ from torch.optim import lr_scheduler
 from torch.utils.data import Dataset, DataLoader
 from torchvision import models, transforms
 
-from HEAL.Training import model_train
-from HEAL.Training import create_test_tiles
+from Training import model_train
+from Training import create_test_tiles
 
 import staintools
 #import pysnooper
 import pip
-
 
 def install(package):
     if hasattr(pip, 'main'):
@@ -102,8 +98,8 @@ def load_data(_class_cate, _class_number, _work_mode, _bs, fn = 0):
         transforms.ToTensor()
     ])
     create_test_tiles.create_test_files()
-    train_img_label_df = pd.read_csv("HEAL_Workspace/outputs/train_fold_{}.csv".format(fn))
-    val_img_label_df = pd.read_csv("HEAL_Workspace/outputs/val_fold_{}.csv".format(fn))
+    train_img_label_df = pd.read_csv("/mnt/efs-tcga/HEAL_Workspace/outputs/train_fold_{}.csv".format(fn))
+    val_img_label_df = pd.read_csv("/mnt/efs-tcga/HEAL_Workspace/outputs/val_fold_{}.csv".format(fn))
     train_dataset = ImageDataset(dataframe=train_img_label_df, transform=train_data_transforms,
                                  class_cate=_class_cate, class_num=_class_number, mode=_work_mode)
     val_dataset = ImageDataset(dataframe=val_img_label_df, transform=data_transforms,
@@ -367,7 +363,7 @@ def get_weight(_class_cate, _class_number, _mode):
         for i in range(_class_number):
             weights.append(1)
     else:
-        train_df = pd.read_csv("HEAL_Workspace/outputs/train_fold_0.csv")
+        train_df = pd.read_csv("/mnt/efs-tcga/HEAL_Workspace/outputs/train_fold_0.csv")
         _class_c = list(_class_cate)
         num_count = []
         for _cc in _class_c:
@@ -384,12 +380,12 @@ def train(_models, tile_size = 512, CV_Enable = False):
     Image_Size = tile_size
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
-    conf_dict = load_variable("HEAL_Workspace/outputs/parameter.conf")
+    conf_dict = load_variable("/mnt/efs-tcga/HEAL_Workspace/outputs/parameter.conf")
     _work_mode = conf_dict["Mode"]
     _class_cate = conf_dict["Classes"]
     _class_number = conf_dict["Class_number"]
     try:
-        hp_dict = load_variable("HEAL_Workspace/outputs/hyper_parameter.conf")
+        hp_dict = load_variable("/mnt/efs-tcga/HEAL_Workspace/outputs/hyper_parameter.conf")
         _lr = hp_dict['lr']
         _gamma = hp_dict['gamma']
         _models = [hp_dict['model_name']]
@@ -397,7 +393,7 @@ def train(_models, tile_size = 512, CV_Enable = False):
         _bs = hp_dict['batch_size']
         print("Hyperparameters optimized by Hyperopt are using for model training, "
               "if you want to use your customized hyperparameter, please delete "
-              "the configuration file: HEAL_Workspace/outputs/parameter.conf")
+              "the configuration file: /mnt/efs-tcga/HEAL_Workspace/outputs/parameter.conf")
         print("----------------Configuration-----------------")
         print("Model architecture: {}".format(_models))
         print("Batch size: {}".format(_bs))

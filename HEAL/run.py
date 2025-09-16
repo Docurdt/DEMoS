@@ -1,37 +1,28 @@
-#!/usr/bin/env python
-# -*- coding: UTF-8 -*-
-"""
-from HEAL.HEAL_APP import tiling
-from HEAL.HEAL_APP import train
-from HEAL.HEAL_APP import cross_validation
-from HEAL.HEAL_APP import independent_test
-from HEAL.HEAL_APP import survival_analysis
-
-"""
+import sys
+import os
 import pickle
-from HEAL.Tiling import tiling
-from HEAL.Pre_processing import pre_processing
-from HEAL.Data_split import data_split
-from HEAL.Training import train
-from HEAL.Independent_test import independent_test
-from HEAL.Hyperparameter_optimisation import hyperparameter_optimisation
-from HEAL.Data_visualisation import data_visualisation
-from HEAL.Grad_Cam import grad_cam
+from Tiling import tiling
+from Pre_processing import pre_processing
+from Data_split import data_split
+from Training import train
+from Independent_test import independent_test
+from Hyperparameter_optimisation import hyperparameter_optimisation
+from Data_visualisation import data_visualisation
+from Grad_Cam import grad_cam
 
 
 def save_variable(var, filename):
-    pickle_f = open(filename, 'wb')
-    pickle.dump(var, pickle_f)
-    pickle_f.close()
+    with open(filename, 'wb') as pickle_f:
+        pickle.dump(var, pickle_f)
     return filename
 
 
 def load_variable(filename):
-    pickle_f = open(filename, 'rb')
-    var = pickle.load(pickle_f)
-    pickle_f.close()
+    with open(filename, 'rb') as pickle_f:
+        var = pickle.load(pickle_f)
     return var
-
+import argparse
+import os
 
 def run(**kwargs):
     """
@@ -41,9 +32,9 @@ def run(**kwargs):
         testing_label_file = None;
         models = ['ResNet50'];
         training_mode = "single_round";
-        procedure = ["Tiling", "Data_Split", "Training",  "Testing", "Survival_analysis"].
+        procedure = ["Tiling", "Pre_processing", "Data_Split", "Training",  "Hyperparameter_optimisation", "Testing", "Survival_analysis"].
 
-    **parameter description**
+    **Parameter description**
         1) label_file: (string) the file path of the input csv format file. The csv file
         contains two columns,
             col_1: "Image_path" (the image file paths of each patient)
@@ -70,77 +61,112 @@ def run(**kwargs):
                 d) testing: to test the model performance based on the optimised model;
                 e) survival_analysis: (Optional) to conduct the survival analysis based on
                  the output of the independent test.
-
     """
-    # print(kwargs.items())
+    print(kwargs.items())
+
     # Parse the input parameters
-    _label_file = None
-    _testing_label_file = None
-    _models = None
-    _training_mode = None
-    _procedure = None
-    _tile_info = None
-    _filter_model = None
-    _extra_test_file = None
-    _extra_testing_pre_processing_enable = False
-    for _key, _val in kwargs.items():
-        # print(_key, _val)
-        if _key is "label_file":
-            _label_file = _val
-        elif _key is "tile_info":
-            _tile_info = _val
-        elif _key is "filter_model":
-            _filter_model = _val
-        elif _key is "testing_label_file":
-            _testing_label_file = _val
-        elif _key is "extra_testing_label_file":
-            _extra_test_file = _val
-        elif _key is "extra_testing_pre_processing_enable":
-            _extra_testing_pre_processing_enable = _val
-        elif _key is "models":
-            _models = _val
-        elif _key is "training_mode":
-            _training_mode = _val
-        elif _key is "procedure":
-            _procedure = _val
-    _label_file_tiled = None
-    if _label_file is not None:
-        _label_file_tiled = "HEAL_Workspace/outputs/label_file_tiled.csv"
+    _label_file = kwargs.get("label_file", None)
+    _testing_label_file = kwargs.get("testing_label_file", None)
+    _models = kwargs.get("models", None)
+    _training_mode = kwargs.get("training_mode", "Single_round")
+    _procedure = kwargs.get("procedure", None)
+    _tile_info = kwargs.get("tile_info", [256, 0])  # Default values for tile size and level
+    _filter_model = kwargs.get("filter_model", None)
+    _extra_test_file = kwargs.get("extra_testing_label_file", None)
+    _extra_testing_pre_processing_enable = kwargs.get("extra_testing_pre_processing_enable", False)
 
-    _test_label_file_tiled = None
-    if _testing_label_file is not None:
-        _test_label_file_tiled = "HEAL_Workspace/outputs/test_label_file_tiled.csv"
+    _label_file_tiled = "/mnt/efs-tcga/HEAL_Workspace/outputs/label_file_tiled.csv" if _label_file else None
+    _test_label_file_tiled = "/mnt/efs-tcga/HEAL_Workspace/outputs/test_label_file_tiled.csv" if _testing_label_file else None
 
-    # Call the corresponding functions based on the specified procedures.
+    # Create necessary directories if they do not exist
+    os.makedirs('/mnt/efs-tcga/HEAL_Workspace/tiling/train', exist_ok=True)
+    os.makedirs('/mnt/efs-tcga/HEAL_Workspace/outputs', exist_ok=True)
+
+    # Call the corresponding functions based on the specified procedures
     for _proc in _procedure:
-        if _proc is "Tiling":
+        if _proc == "Tiling":
             print("[INFO] Start tiling ...")
             tiling.tiling(_label_file, _testing_label_file, _tile_size=_tile_info[0], _tile_level=_tile_info[1])
-        elif _proc is "Pre_processing":
+        elif _proc == "Pre_processing":
             print("[INFO] Image pre-processing: color correction and blur detection ...")
-            pre_processing.pre_processing()
-        elif _proc is "Data_split":
+            _img_path_template = input("Please input the path of the template image: ")
+            pre_processing.pre_processing(_img_path_template=_img_path_template)
+        elif _proc == "Data_split":
             print("[INFO] Data split ...")
             data_split.data_split(_label_file_tiled, _test_label_file_tiled)
-        elif _proc is "Hyperparameter_optimisation":
+        elif _proc == "Hyperparameter_optimisation":
             print("[INFO] Using HyperOpt to optimise the parameters ...")
             hyperparameter_optimisation.tuning()
-        elif _proc is "Training":
-            if _training_mode is "Single_round":
+        elif _proc == "Training":
+            if _training_mode == "Single_round":
                 print("[INFO] Training the model in single round mode ...")
                 train.train(_models, tile_size=_tile_info[0])
-            elif _training_mode is "Cross_validation":
+            elif _training_mode == "Cross_validation":
                 print("[INFO] Training the model in 10-fold cross-validation mode ...")
                 train.train(_models, tile_size=_tile_info[0], CV_Enable=True)
-        elif _proc is "Testing":
+        elif _proc == "Testing":
             print("[INFO] Running the independent test ...")
             independent_test.independent_test(_models, _tile_info, extra_test_set=_extra_test_file,
                                               pre_processing_enable=_extra_testing_pre_processing_enable)
-        elif _proc is "Data_visualisation":
+        elif _proc == "Data_visualisation":
             print("[INFO] Running the data visualisation ...")
             data_visualisation.data_visualisation(_tile_info)
-        elif _proc is "Grad_CAM":
+        elif _proc == "Grad_CAM":
             print("[INFO] Using Grad-CAM to visualize the key regions ...")
             grad_cam.grad_cam()
 
     print(_label_file, _testing_label_file, _models, _training_mode, _procedure)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run the HEAL package pipeline for image analysis and model training.")
+    
+    parser.add_argument('--label_file', type=str, required=True, 
+                        help="(required) Path to the label file containing the training data.")
+    parser.add_argument('--testing_label_file', type=str, default=None, 
+                        help="(optional) Path to the testing label file. If not provided, the main label file will be used for testing.")
+    parser.add_argument('--models', type=str, nargs='+', required=True, 
+                        help=("(required) List of models to use for training and testing:"
+                                "AlexNet, DenseNet161, EFF-NET, GoogleNet, InceptionV3, MNASNET, "
+                                "MobileNetV2, ResNet101, ResNet152, ResNet18, ResNet34, ResNet50, "
+                                "ShuffleNetV2, Vgg16, Vgg16_BN, Vgg19, Vgg19_BN, WideResNet101, "
+                                "WideResNet50"
+                            ))
+    parser.add_argument('--training_mode', type=str, choices=['Single_round', 'Cross_validation'], default='Single_round',
+                        help="(optional) Training mode, either single_round or Cross_validation. Default is single_round.")
+    parser.add_argument('--procedure', type=str, nargs='+', required=True, 
+                        help=("(required) Procedure steps to run, specified as a list of strings:"
+                                "Tiling: Divides the images into smaller tiles for processing."
+                                "Pre_processing: Prepares the images for analysis."
+                                "Data_split: Splits the data into training, validation, and testing sets."
+                                "Hyperparameter_optimisation: Optimises the hyperparameters of the model."
+                                "Training: Trains the model using the training data."
+                                "Testing: Tests the model using the testing data."
+                                "Data_visualisation: Visualises the processed data."
+                                "Grad_CAM: Uses Grad-CAM to visualise the key regions of the image."
+                            ))
+    parser.add_argument('--tile_info', type=int, nargs=2, default=[1000, 0], 
+                        help="(optional) Tile size and level, specified as two integers. Default is [1000, 0].")
+    parser.add_argument('--filter_model', type=str, default=None, 
+                        help="(optional) Model filtering criteria.")
+    parser.add_argument('--extra_testing_label_file', type=str, default=None, 
+                        help="(optional) Path to an additional testing label file.")
+    parser.add_argument('--extra_testing_pre_processing_enable', action='store_true', 
+                        help="(optional) Whether to enable pre-processing for the extra testing set.")
+    
+    args = parser.parse_args()
+    
+    run(
+        label_file=args.label_file,
+        testing_label_file=args.testing_label_file,
+        models=args.models,
+        training_mode=args.training_mode,
+        procedure=args.procedure,
+        tile_info=args.tile_info,
+        filter_model=args.filter_model,
+        extra_testing_label_file=args.extra_testing_label_file,
+        extra_testing_pre_processing_enable=args.extra_testing_pre_processing_enable
+    )
+
+if __name__ == "__main__":
+    main()

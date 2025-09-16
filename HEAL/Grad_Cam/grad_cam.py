@@ -1,15 +1,38 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import glob
 import os
 import torch
 from PIL import Image
 from torchvision import models, transforms
 from torchvision.utils import save_image
-from HEAL.Grad_Cam.cam import SmoothGradCAMpp
-from HEAL.Grad_Cam.visualize import visualize, reverse_normalize
-from HEAL.Independent_test.independent_test import load_variable
-from HEAL.Training.train import get_model
+from Grad_Cam.cam import SmoothGradCAMpp
+from Grad_Cam.visualize import visualize, reverse_normalize
+from Independent_test.independent_test import load_variable
+from Training.train import get_model
+
+
 
 def get_target_layer(_model_name, model):
+    """
+    Retrieves the target layer from the specified model for Grad-CAM visualization.
+
+    This function maps model names to their corresponding target layers, which are used to compute
+    the class activation maps. It supports various architectures including ResNet, VGG, AlexNet, and others.
+
+    Args:
+        _model_name (str): The name of the model architecture.
+        model (torch.nn.Module): The model instance from which to retrieve the target layer.
+
+    Returns:
+        torch.nn.Module: The target layer for Grad-CAM visualization.
+
+    Raises:
+        ValueError: If the model name is not recognized.
+    """
     if _model_name == "ResNet50":
         target_layer = model.module.layer4[2].conv3
         return target_layer
@@ -75,6 +98,19 @@ def get_target_layer(_model_name, model):
 
 
 def grad_cam():
+    """
+    Generates and saves Grad-CAM visualizations for images processed by a deep learning model.
+
+    This function creates a directory for output figures, loads the latest model and output files,
+    processes each image to generate Grad-CAM heatmaps, and saves the visualizations to disk.
+
+    Args:
+        None
+
+    Returns:
+        None
+    """
+    
     if not os.path.exists("HEAL_Workspace/figures/grad-cam"):
         os.mkdir("HEAL_Workspace/figures/grad-cam")
     conf_dict = load_variable("HEAL_Workspace/outputs/parameter.conf")

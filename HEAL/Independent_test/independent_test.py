@@ -3,6 +3,11 @@
 """
 
 """
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 
 import os
 import pickle
@@ -22,10 +27,10 @@ from sklearn.metrics import roc_curve, auc
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import time
-from HEAL.Independent_test import extra_tiling
-from HEAL.Pre_processing import pre_processing
-from HEAL.Independent_test import create_test_file
-from HEAL.Training import train
+from Independent_test import extra_tiling
+from Pre_processing import pre_processing
+from Independent_test import create_test_file
+from Training import train
 
 plt.ion()   # interactive mode
 

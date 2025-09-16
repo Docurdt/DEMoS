@@ -3,6 +3,13 @@
 # Some of the codes were referred to Nicolas's script.
 #
 # ---------------------------------------------#
+
+# from openslide_lib.openslide import open_slide, ImageSlide
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import openslide
 from openslide import open_slide, ImageSlide
 from openslide.deepzoom import DeepZoomGenerator

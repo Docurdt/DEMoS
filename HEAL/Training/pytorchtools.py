@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import torch
 
@@ -25,7 +26,6 @@ class EarlyStopping:
         self.path = path
 
     def __call__(self, val_loss, model):
-
         score = -val_loss
 
         if self.best_score is None:
@@ -45,5 +45,10 @@ class EarlyStopping:
         '''Saves model when validation loss decrease.'''
         if self.verbose:
             print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        
+        # Save the model state
         torch.save(model.state_dict(), self.path)
         self.val_loss_min = val_loss

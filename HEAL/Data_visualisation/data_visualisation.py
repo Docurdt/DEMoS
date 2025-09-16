@@ -14,78 +14,68 @@ import cv2
 from collections import Counter
 from PIL import Image
 
+
+# Função para salvar uma variável em um arquivo pickle
 def save_variable(var, filename):
-    pickle_f = open(filename, 'wb')
-    pickle.dump(var, pickle_f)
-    pickle_f.close()
+    os.makedirs(os.path.dirname(filename), exist_ok=True)  # Garante que o diretório exista
+    with open(filename, 'wb') as f:
+        pickle.dump(var, f)
     return filename
 
-
+# Função para carregar uma variável de um arquivo pickle
 def load_variable(filename):
-    pickle_f = open(filename, 'rb')
-    var = pickle.load(pickle_f)
-    pickle_f.close()
-    return var
+    with open(filename, 'rb') as f:
+        return pickle.load(f)
 
+# Função para garantir a criação do diretório antes de salvar uma imagem
+def ensure_dir_exists(filepath):
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
+# Função para plotar a matriz de confusão
 def plot_confusion_matrix(y_true, y_pred, classes, normalize=True, title=None, cmap=plt.cm.Blues, fig_name="Confusion_matrix.png"):
     plt.close('all')
     plt.figure(figsize=(8, 8), dpi=400)
-    if not title:
-        if normalize:
-            title = 'Normalized confusion matrix of independent test results'
-        else:
-            title = 'Confusion matrix, without normalization'
+    title = title or ('Normalized confusion matrix' if normalize else 'Confusion matrix')
 
-    # Compute confusion matrix
     cm = confusion_matrix(y_true.argmax(axis=1), y_pred.argmax(axis=1))
-
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
 
-    plt.close('all')
     plt.style.use("ggplot")
     fig, ax = plt.subplots()
     im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
     ax.figure.colorbar(im, ax=ax)
-    # We want to show all ticks...
-    ax.set(xticks=np.arange(cm.shape[1]),
-           yticks=np.arange(cm.shape[0]),
-           # ... and label them with the respective list entries
-           xticklabels=classes, yticklabels=classes,
-           title=title,
-           ylabel='True label',
-           xlabel='Predicted label')
 
-    # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-             rotation_mode="anchor")
+    ax.set(xticks=np.arange(cm.shape[1]), yticks=np.arange(cm.shape[0]),
+           xticklabels=classes, yticklabels=classes, title=title,
+           ylabel='True label', xlabel='Predicted label')
 
-    # Loop over data dimensions and create text annotations.
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
     fmt = '.2f' if normalize else 'd'
     thresh = cm.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            ax.text(j, i, format(cm[i, j], fmt),
-                    ha="center", va="center",
+            ax.text(j, i, format(cm[i, j], fmt), ha="center", va="center",
                     color="white" if cm[i, j] > thresh else "black")
+
     fig.tight_layout()
-    fig.savefig('HEAL_Workspace/figures/{}'.format(fig_name), dpi=400)
-    return ax
+    ensure_dir_exists(fig_name)
+    fig.savefig(fig_name, dpi=400)
+    plt.close(fig)
 
-
-def plot_roc_curve(pred_y, test_y, class_label, n_classes, fig_name="roc_auc.png", title="ROC curve of HEAL"):
+# Função para plotar a curva ROC
+def plot_roc_curve(pred_y, test_y, class_label, n_classes, fig_name="roc_auc.png", title="ROC curve"):
     colors = ["#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#000000", "#66CC99", "#999999"]
     plt.close('all')
     plt.style.use("ggplot")
     plt.figure(figsize=(8, 8), dpi=400)
+
     for i in range(n_classes):
-        _tmp_pred = pred_y
-        _tmp_label = test_y
-        _fpr, _tpr, _ = roc_curve(_tmp_label[:, i], _tmp_pred[:, i])
-        _auc = auc(_fpr, _tpr)
-        plt.plot(_fpr, _tpr, color=colors[i],
-                 label=r'%s ROC (AUC = %0.3f)' % (class_label[i], _auc), lw=2, alpha=.9)
+        fpr, tpr, _ = roc_curve(test_y[:, i], pred_y[:, i])
+        roc_auc = auc(fpr, tpr)
+        plt.plot(fpr, tpr, color=colors[i], label=f'{class_label[i]} ROC (AUC = {roc_auc:.3f})', lw=2)
+
     plt.plot([0, 1], [0, 1], 'k--', lw=2)
     plt.xlim([-0.01, 1.01])
     plt.ylim([-0.01, 1.01])
@@ -93,8 +83,63 @@ def plot_roc_curve(pred_y, test_y, class_label, n_classes, fig_name="roc_auc.png
     plt.ylabel('True Positive Rate')
     plt.title(title)
     plt.legend(loc="lower right")
+
+    ensure_dir_exists(fig_name)
     plt.savefig(fig_name, dpi=400)
-    plt.close('all')
+    plt.close()
+
+# Função para concatenar imagens e criar um mosaico
+def concat_img(patient_id, class_cate, class_dict, UNIT_SIZE, col_list, row_list, y_pred, label, img_dirs):
+    try:
+        file_name = img_dirs[0].split('/')[-3]
+    except Exception as e:
+        print(img_dirs, e)
+
+    pred_class_index = y_pred.argmax(axis=1)
+    voting = Counter(pred_class_index)
+    true_label = [class_cate[i] for i, lbl in enumerate(label) if lbl == 1]
+
+    print(f"Plotting heatmap of {patient_id}")
+    print(f"Total number of tiles: {len(pred_class_index)}")
+    print(f"True labels: {true_label}")
+
+    for ele in true_label:
+        canvas = Image.new('RGBA', (UNIT_SIZE * max(col_list), UNIT_SIZE * max(row_list)), (255, 255, 255))
+        for idx, img_path in enumerate(img_dirs):
+            col, row = col_list[idx], row_list[idx]
+            try:
+                img = Image.open(img_path).resize((UNIT_SIZE, UNIT_SIZE))
+                canvas.paste(img, (col * UNIT_SIZE, row * UNIT_SIZE))
+            except Exception as e:
+                print(f"Error processing image {img_path}: {e}")
+
+        output_path = f"HEAL_Workspace/figures/{patient_id}_{ele}.png"
+        ensure_dir_exists(output_path)
+        canvas.save(output_path)
+        print(f"Saved heatmap for {patient_id} at {output_path}")
+
+# Função principal para execução do pipeline de ROC e matriz de confusão
+def plot_single_roc_confusion_matrix(results, class_cate, n_class, work_mode):
+    for res in results:
+        base_name = os.path.splitext(os.path.basename(res))[0]
+        fig_name = f"HEAL_Workspace/figures/{base_name}_tile_level_ROC.png"
+        p_fig_name = f"HEAL_Workspace/figures/{base_name}_patient_level_ROC.png"
+
+        result_dict = load_variable(res)
+        preds, labels = result_dict["preds"], result_dict["labels"]
+        patient_res, p_preds, p_labels = patient_level_results(result_dict)
+
+        plot_roc_curve(preds, labels, class_cate, n_class, fig_name=fig_name, title=f"ROC of {base_name}")
+        plot_roc_curve(p_preds, p_labels, class_cate, n_class, fig_name=p_fig_name, title=f"Patient ROC of {base_name}")
+
+        patient_res_path = f"HEAL_Workspace/logs/{base_name}_patient_level.out"
+        save_variable(patient_res, patient_res_path) 
+        ensure_dir_exists(patient_res_path)
+        print(f"[INFO] Patient level results saved to {patient_res_path}")
+
+        if not work_mode:
+            plot_confusion_matrix(labels, preds, class_cate, fig_name=f"HEAL_Workspace/figures/{base_name}_tile_confusion.png")
+            plot_confusion_matrix(p_labels, p_preds, class_cate, fig_name=f"HEAL_Workspace/figures/{base_name}_patient_confusion.png")
 
 
 def cv_result_detect(result_list):
@@ -116,9 +161,9 @@ def cv_result_detect(result_list):
                 break
 
         fold_num = 0
-        for i in range(10):
+        for i in range(3):
             tmp_fold = "fold{}".format(i)
-            tmp_res = re.sub('fold[0-9]', tmp_fold, test_res)
+            tmp_res = re.sub('fold[0-3]', tmp_fold, test_res)
             if tmp_res in result_list:
                 fold_num += 1
 
@@ -163,31 +208,6 @@ def patient_level_results(tile_result_dict):
     return patient_results, new_patient_preds, new_patient_labels
 
 
-def plot_single_roc_confusion_matrix(results, class_cate, n_class, _work_mode):
-    for res in results:
-        base_name = str(res.split("/")[-1]).split(".")[0]
-        fig_name = "HEAL_Workspace/figures/{}_tile_level_ROC.png".format(base_name)
-        p_fig_name = "HEAL_Workspace/figures/{}_patient_level_ROC.png".format(base_name)
-
-        model_base_name = base_name.split("_")[2]
-        title = "ROC curve of {}".format(model_base_name)
-        p_title = "ROC curve of {} (Patient level)".format(model_base_name)
-
-        result_dict = load_variable(res)
-        preds = result_dict["preds"]
-        labels = result_dict["labels"]
-        patient_res, p_preds, p_labels = patient_level_results(result_dict)
-
-        plot_roc_curve(preds, labels, class_cate, n_class, fig_name=fig_name, title=title)
-        plot_roc_curve(p_preds, p_labels, class_cate, n_class, fig_name=p_fig_name, title=p_title)
-        patient_res_path = "HEAL_Workspace/logs/{}_patient_level.out".format(base_name)
-        save_variable(patient_res, patient_res_path)
-
-        if not _work_mode:
-            plot_confusion_matrix(labels, preds, class_cate, fig_name="{}_tile_level_confusion_matrix.png".format(base_name))
-            plot_confusion_matrix(p_labels, p_preds, class_cate, fig_name="{}_patient_level_confusion_matrix.png".format(base_name))
-    return
-
 
 def plot_roc_ms(cv_result_list, class_cate, n_classes, fig_name):
     colors = ["#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7", "#000000", "#66CC99", "#999999"]
@@ -226,7 +246,7 @@ def plot_roc_ms(cv_result_list, class_cate, n_classes, fig_name):
     plt.ylim([-0.01, 1.01])
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('Mean ROC curves on 10-fold cross-validation test')
+    plt.title('Mean ROC curves on 4-fold cross-validation test')
     plt.legend(loc="lower right")
     plt.savefig(fig_name, dpi=400)
     plt.close('all')
@@ -270,74 +290,6 @@ def get_row_col(_img_path):
         _row_list.append(int(_row))
     return _col_list, _row_list
 
-
-def concat_img(patient_id, _class_cate, _class_dict, UNIT_SIZE, col_list, row_list, y_pred, label, img_dirs):
-    try:
-        file_name = img_dirs[0].split('/')[-3]
-    except Exception as e:
-        print(img_dirs)
-        print(e)
-    _pred_class_index = y_pred.argmax(axis=1)
-    print("Plotting heatmap of %s" % patient_id)
-    print("Total number of tiles is %d" % len(_pred_class_index))
-
-    voting = Counter(_pred_class_index)
-
-    true_label = []
-    
-    
-    for i in range(len(label)):
-        if int(label[i]) == 1:
-            true_label.append(_class_cate[i])
-            
-    print("True label is %s" % true_label)
-
-    for ele in true_label:
-        _con_img = Image.new('RGBA', (UNIT_SIZE * max(col_list), UNIT_SIZE * max(row_list)), color=(255, 255, 255))
-        for _i, _idx in enumerate(_pred_class_index):
-            # print(_i,_idx,_pred_class_index)
-            # print(img_dirs[_i])
-            img = cv2.imread(img_dirs[_i])
-            img_r = img[:, :, 0]
-            img_g = img[:, :, 1]
-            img_b = img[:, :, 2]
-            red = np.full((UNIT_SIZE, UNIT_SIZE), 255)
-            green = np.full((UNIT_SIZE, UNIT_SIZE), 255)
-            blue = np.full((UNIT_SIZE, UNIT_SIZE), 255)
-                #print(ele)
-            if _idx == _class_dict[ele]:
-            #if _idx == _class_dict[true_label]:
-                tmp_r = red
-                tmp_g = img_g
-                tmp_b = img_b
-                tmp_a = np.full((UNIT_SIZE, UNIT_SIZE), 255 * y_pred[_i, _idx])
-            else:
-                tmp_r = img_r
-                tmp_g = img_g
-                tmp_b = blue
-                tmp_a = np.full((UNIT_SIZE, UNIT_SIZE), 255 * y_pred[_i, _idx])
-
-            tmp_r = Image.fromarray(np.uint8(tmp_r), mode="L")
-            tmp_g = Image.fromarray(np.uint8(tmp_g), mode="L")
-            tmp_b = Image.fromarray(np.uint8(tmp_b), mode="L")
-            tmp_a = Image.fromarray(np.uint8(tmp_a), mode="L")
-            tmp_img = Image.merge("RGBA", (tmp_r, tmp_g, tmp_b, tmp_a))
-            _con_img.paste(tmp_img, (col_list[_i] * UNIT_SIZE, row_list[_i] * UNIT_SIZE, (col_list[_i] + 1) * UNIT_SIZE, (row_list[_i] + 1) * UNIT_SIZE))
-        plt.close("all")
-        plt.style.use("ggplot")
-        #matplotlib.rcParams['font.family'] = "Arial"
-        plt.rcParams["axes.grid"] = False
-        plt.title("Predicted as %s" % (true_label), fontsize=12)
-        plt.axis('off')
-        #plt.title(ele, )
-        sc = plt.imshow(_con_img, vmin=0, vmax=1, cmap="bwr")
-        cbar = plt.colorbar(sc, ticks=[1, 0])
-        cbar.ax.set_yticklabels(["%s"%ele, "Not-%s"%ele])
-        #plt.show()
-        plt.savefig('HEAL_Workspace/figures/%s_%s_concat_%s_%f.png' %
-                    (patient_id, ele, _class_cate[voting.most_common(1)[0][0]], voting.most_common(1)[0][1] / len(_pred_class_index)), dpi=300)
-
-    return
 
 
 def plot_conc_heatmap(result_list, img_size, _class_number, _class_cate, _class_dict):

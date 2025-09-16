@@ -1,10 +1,27 @@
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import torch
 import torch.nn.functional as F
 
 from statistics import mode, mean
 
-
 class SaveValues():
+    """
+    Captures and stores activations and gradients from a specified neural network module.
+
+    This class registers hooks to a given module to save the output of the forward pass and the gradients
+    during the backward pass, allowing for analysis of the model's behavior.
+
+    Args:
+        m (torch.nn.Module): The neural network module from which to capture activations and gradients.
+
+    Attributes:
+        activations (Tensor): The output of the forward pass.
+        gradients (Tensor): The gradients from the backward pass.
+    """
     def __init__(self, m):
         # register a hook to save values of activations and gradients
         self.activations = None
@@ -28,9 +45,14 @@ class CAM(object):
 
     def __init__(self, model, target_layer):
         """
+        Initializes the CAM object with a model and target layer.
+
+        This class computes the Class Activation Mapping for a given model and target layer, which is useful
+        for visualizing the regions of an image that contribute to the model's predictions.
+
         Args:
-            model: a base model to get CAM which have global pooling and fully connected layer.
-            target_layer: conv_layer before Global Average Pooling
+            model (torch.nn.Module): The base model to get CAM from, which should have a global pooling and fully connected layer.
+            target_layer (torch.nn.Module): The convolutional layer before Global Average Pooling.
         """
 
         self.model = model
@@ -41,10 +63,17 @@ class CAM(object):
 
     def forward(self, x, idx=None):
         """
+        Computes the Class Activation Mapping for the input image.
+
+        This method performs a forward pass through the model, calculates the probabilities, and generates
+        the CAM for the predicted class.
+
         Args:
-            x: input image. shape =>(1, 3, H, W)
-        Return:
-            heatmap: class activation mappings of the predicted class
+            x (Tensor): The input image with shape (1, 3, H, W).
+            idx (int, optional): The index of the predicted class. If None, it will be determined from the model's output.
+
+        Returns:
+            Tuple[Tensor, int]: The CAM for the predicted class and the predicted class index.
         """
 
         # object classification
@@ -67,16 +96,31 @@ class CAM(object):
         return cam, idx
 
     def __call__(self, x):
-        return self.forward(x)
+        """
+        Calls the forward method to compute the CAM.
+
+        Args:
+            x (Tensor): The input image with shape (1, 3, H, W).
+
+        Returns:
+            Tuple[Tensor, int]: The CAM for the predicted class and the predicted class index.
+        """
 
     def getCAM(self, values, weight_fc, idx):
-        '''
-        values: the activations and gradients of target_layer
-            activations: feature map before GAP.  shape => (1, C, H, W)
-        weight_fc: the weight of fully connected layer.  shape => (num_classes, C)
-        idx: predicted class id
-        cam: class activation map.  shape => (1, num_classes, H, W)
-        '''
+        """
+        Generates the Class Activation Map using the activations and weights.
+
+        This method computes the CAM based on the activations from the target layer and the weights from
+        the fully connected layer.
+
+        Args:
+            values (SaveValues): The activations and gradients of the target layer.
+            weight_fc (Tensor): The weights of the fully connected layer.
+            idx (int): The predicted class index.
+
+        Returns:
+            Tensor: The Class Activation Map for the predicted class.
+        """
 
         cam = F.conv2d(values.activations, weight=weight_fc[:, :, None, None])
         _, _, h, w = cam.shape
@@ -98,9 +142,14 @@ class GradCAM(CAM):
         super().__init__(model, target_layer)
 
         """
+        Initializes the GradCAM object with a model and target layer.
+
+        This class extends the CAM class to compute Grad-CAM, which uses gradients to enhance the class
+        activation mapping visualization.
+
         Args:
-            model: a base model to get CAM, which need not have global pooling and fully connected layer.
-            target_layer: conv_layer you want to visualize
+            model (torch.nn.Module): The base model to get CAM from, which need not have a global pooling and fully connected layer.
+            target_layer (torch.nn.Module): The convolutional layer to visualize.
         """
 
     def forward(self, x, idx=None):
